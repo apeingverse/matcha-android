@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login</title>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #007bff, #0056b3);
+            color: #333;
+        }
+        .login-container {
+            background: #fff;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
+            width: 100%;
+            max-width: 400px;
+            text-align: center;
+        }
+        .login-container h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #007bff;
+        }
+        .login-container input {
+            width: 90%;
+            padding: 12px;
+            margin: 10px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .login-container button {
+            width: 100%;
+            padding: 12px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+        .login-container button:hover {
+            background-color: #0056b3;
+        }
+        .notification {
+            margin-top: 15px;
+            font-size: 14px;
+        }
+        .notification.success {
+            color: green;
+        }
+        .notification.error {
+            color: red;
+        }
+        .login-container .footer {
+            margin-top: 20px;
+            font-size: 14px;
+            color: #666;
+        }
+        .login-container .footer a {
+            color: #007bff;
+            text-decoration: none;
+        }
+        .login-container .footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <img src ="Logo.jpg" alt="Logo" style="width: 150px; margin-bottom: 20px;">
+        <input type="text" id="email" placeholder="Email" />
+        <input type="password" id="password" placeholder="Password" />
+        <button onclick="login()">Login</button>
+        <div id="notification" class="notification"></div>
+    </div>
+
+    <script>
+        const BASE_URL = "https://api.matchaapp.net";
+
+        // Redirect to chats page if already logged in
+        const accessToken = localStorage.getItem("accessToken");
+        if (accessToken) {
+            window.location.href = "/chat.html";
+        }
+
+        async function login() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const notification = document.getElementById('notification');
+            notification.textContent = '';
+            notification.className = 'notification';
+
+            try {
+                const response = await axios.post(`${BASE_URL}/api/Authentication/Login`, {
+                    email: email,
+                    password: password
+                });
+
+                const data = response.data.response;
+                if (!data || !data.accessToken) {
+                    throw new Error("Invalid login response");
+                }
+
+                // Clear any existing tokens
+                localStorage.removeItem("accessToken");
+
+                // Store new access token
+                localStorage.setItem("accessToken", data.accessToken);
+
+                notification.className = 'notification success';
+                notification.textContent = 'Login successful! Redirecting...';
+
+                // Redirect to chats page
+                setTimeout(() => {
+                    window.location.href = "/chat.html";
+                }, 1000);
+            } catch (error) {
+                notification.className = 'notification error';
+                notification.textContent = error.response?.data?.errorMessages?.[0] || 'An error occurred.';
+            }
+        }
+    </script>
+</body>
+</html>
