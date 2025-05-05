@@ -1,0 +1,16 @@
+workflows:
+  react-native-android:
+    name: Build Android APK
+    environment:
+      node: 18.18.2
+      java: 17
+    scripts:
+      - name: Install dependencies
+        script: |
+          yarn install  # Or replace with `npm install` if you use npm
+      - name: Build Android release APK
+        script: |
+          cd android
+          ./gradlew assembleRelease
+    artifacts:
+      - android/app/build/outputs/**/*.apk
