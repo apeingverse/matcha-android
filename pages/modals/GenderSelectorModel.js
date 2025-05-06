@@ -2,9 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import modalStyles from './modalStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRoute, useNavigation } from '@react-navigation/native';
 
-const GenderSelectorModal = ({ route, navigation }) => {
-  const { selectedGender, isDatingMode, onSelect } = route.params;
+const GenderSelectorModal = () => {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const { selectedGender, isDatingMode, setGender, setGenderName } = route.params;
+
   const [genders, setGenders] = useState([]);
   const [current, setCurrent] = useState(selectedGender);
 
@@ -24,6 +28,13 @@ const GenderSelectorModal = ({ route, navigation }) => {
 
     fetchGenders();
   }, []);
+
+  const handleDone = () => {
+    const selected = genders.find(g => g.id === current);
+    setGender(current);
+    setGenderName(selected?.name || '');
+    navigation.goBack();
+  };
 
   return (
     <View style={modalStyles.container}>
@@ -56,13 +67,7 @@ const GenderSelectorModal = ({ route, navigation }) => {
         ))}
       </ScrollView>
 
-      <TouchableOpacity
-        style={modalStyles.doneButton}
-        onPress={() => {
-          onSelect(current);
-          navigation.goBack();
-        }}
-      >
+      <TouchableOpacity style={modalStyles.doneButton} onPress={handleDone}>
         <Text style={modalStyles.doneButtonText}>Done</Text>
       </TouchableOpacity>
     </View>

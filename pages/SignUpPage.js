@@ -11,7 +11,7 @@ import {
 import CheckBox from '@react-native-community/checkbox';
 import DateTimePicker from '@react-native-community/datetimepicker';
 // import Icon from 'react-native-vector-icons/FontAwesome'; // Import Eye Icon
-import Icon from 'react-native-vector-icons/Ionicons'; 
+import Icon from 'react-native-vector-icons/FontAwesome';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
@@ -69,11 +69,6 @@ const validatePassword = (password) => {
     if (!emailRegex.test(email)) {
       setEmailError('Invalid email format');
       hasError = true;
-    }
-
-    if (!isChecked) {
-      Alert.alert('Error', 'You must accept the rules and regulations.');
-      return;
     }
   
     if (!validatePassword(password)) {
@@ -209,18 +204,21 @@ const validatePassword = (password) => {
       </TouchableOpacity>
 
       {showDatePicker && (
-        <View style={styles.pickerContainer}>
-          <DateTimePicker
-            value={tempDob} 
-            mode="date"
-            display="spinner"
-            maximumDate={new Date()} // Prevents selecting a future date
-            onChange={(event, selectedDate) => {
-              if (selectedDate) {
-                setTempDob(selectedDate); // Only update temporary state
-              }
-            }}
-          />
+  <View style={styles.pickerContainer}>
+    <DateTimePicker
+      value={tempDob}
+      mode="date"
+      display="spinner"
+      maximumDate={new Date()}
+      onChange={(event, selectedDate) => {
+        if (event.type === 'set' && selectedDate) {
+          setDob(selectedDate); // ✅ update dob immediately
+          setShowDatePicker(false); // ✅ close picker after OK
+        } else if (event.type === 'dismissed') {
+          setShowDatePicker(false); // just close if dismissed
+        }
+      }}
+    />
           {/* Confirm Button */}
           <TouchableOpacity 
             style={styles.confirmButton} 
@@ -239,14 +237,7 @@ const validatePassword = (password) => {
       )}
 
 
-        {/* Checkbox for Rules & Regulations */}
-        <View style={styles.checkboxContainer}>
-  <CheckBox value={isChecked} onValueChange={setIsChecked} />
-  <Text style={styles.checkboxText}>
-  &nbsp;I agree to the <Text style={styles.rulesText}>Rules & Regulations</Text>
-  </Text>
-</View>
-
+        
 
         <TouchableOpacity style={styles.signupButton} onPress={handleSignUp}>
           <Text style={styles.signupButtonText}>Sign Up</Text>

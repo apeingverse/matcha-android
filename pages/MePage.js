@@ -12,9 +12,6 @@ import styles from '../styles/MePageStyles';
 import { useMatchType } from '../contexts/MatchTypeContext';
 import { useNavigation } from '@react-navigation/native';
 
-
-
-
 const profileEndpoints = {
   Date: '/api/Profile/GetDatingProfile',
   Business: '/api/Profile/GetBusinessProfile',
@@ -39,10 +36,10 @@ const lookupApis = {
   genderOther: '/api/GenderSexualOrientationPronoun/GetOtherModeGenderById',
 };
 
-const MePage = () => {
+const MePage = ({ handleLogout }) => {
   const { activeSelection } = useMatchType();
   const navigation = useNavigation();
-  
+  const [location, setLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [userInfo, setUserInfo] = useState(null);
   const [profileInfo, setProfileInfo] = useState(null);
@@ -75,11 +72,6 @@ const MePage = () => {
     }
   };
 
-  const handleLogout = async () => {
-    await AsyncStorage.removeItem('accessToken');
-    navigation.replace('Login');
-  };
-
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -97,12 +89,13 @@ const MePage = () => {
         const profile = profileRes.response;
         setProfileInfo(profile);
 
+        const locationRes = await fetchWithAuth('/api/Location/GetUserLocation');
+        const loc = locationRes.response;
+        setLocation(loc ? `${loc.province}, ${loc.city}` : 'Not set');
+
         const profileTypeId = profileTypeIdMap[activeSelection];
         const photoRes = await fetchWithAuth(`/api/Photo/GetProfilePhotos?profileType=${profileTypeId}`);
-        console.log(`📷 Full photo response for ${activeSelection}:`, photoRes);
-
         setPhotos(Array.isArray(photoRes) ? photoRes : []);
-
 
         const genderApi =
           activeSelection === 'Date'
@@ -140,7 +133,6 @@ const MePage = () => {
           orientation: orientationNames.map((o) => o.response.name),
           matchGender: matchGenderNames.map((g) => g.response.name),
           tags: (tagNames || []).map((t) => t.response?.name),
-
         });
       } catch (err) {
         console.error('❌ Error loading profile:', err);
@@ -163,7 +155,6 @@ const MePage = () => {
         <Text style={styles.value}>No profile created for this match type yet.</Text>
       ) : (
         <>
-          {/* Top Header with Image & Name */}
           <View style={styles.header}>
             {photos.length > 0 && (
               <Image
@@ -175,6 +166,13 @@ const MePage = () => {
               <Text style={styles.userName}>
                 {userInfo?.firstName} {userInfo?.lastName}
               </Text>
+
+              {userInfo?.dob && (
+              <Text style={styles.ageText}>
+                {Math.floor((new Date() - new Date(userInfo.dob)) / (1000 * 60 * 60 * 24 * 365.25))} years old
+              </Text>
+            )}
+
               <TouchableOpacity
                 style={styles.editButton}
                 onPress={() => navigation.navigate('EditProfilePage')}
@@ -183,27 +181,27 @@ const MePage = () => {
               </TouchableOpacity>
             </View>
           </View>
-  
-          {/* Personal Info Block */}
+
+          
+
+
           <View style={styles.personalInfoSection}>
-            <Text style={styles.sectionTitle}>Personal Info</Text>
-            <Text style={styles.infoText}>Email: {userInfo?.email}</Text>
-            <Text style={styles.infoText}>Date of Birth: {userInfo?.dob}</Text>
-            <Text style={styles.infoText}>Gender: {resolvedData.gender}</Text>
-            <Text style={styles.infoText}>Pronoun: {resolvedData.pronoun}</Text>
-            <Text style={styles.infoText}>Match With: {resolvedData.matchGender.join(', ')}</Text>
-            {activeSelection === 'Date' && (
-              <Text style={styles.infoText}>Sexual Orientation: {resolvedData.orientation.join(', ')}</Text>
-            )}
-          </View>
-  
-          {/* Bio Block */}
+          <Text style={styles.sectionTitle}>Personal Info</Text>
+          <Text style={styles.infoText}>Gender: {resolvedData.gender}</Text>
+          <Text style={styles.infoText}>Pronoun: {resolvedData.pronoun}</Text>
+          <Text style={styles.infoText}>Match With: {resolvedData.matchGender.join(', ')}</Text>
+          {activeSelection === 'Date' && (
+            <Text style={styles.infoText}>
+              Sexual Orientation: {resolvedData.orientation.join(', ')}
+            </Text>
+          )}
+        </View>
+
           <View style={styles.bioSection}>
             <Text style={styles.sectionTitle}>Bio</Text>
             <Text style={styles.infoText}>{profileInfo.bio || 'No bio available.'}</Text>
           </View>
-  
-          {/* Interests Block */}
+
           <View style={styles.interestsSection}>
             <Text style={styles.sectionTitle}>Interests</Text>
             <View style={styles.interestsContainer}>
@@ -218,8 +216,7 @@ const MePage = () => {
               )}
             </View>
           </View>
-  
-          {/* Photos Block */}
+
           <View style={styles.interestsSection}>
             <Text style={styles.sectionTitle}>Photos</Text>
             <View style={styles.photoContainer}>
@@ -238,13 +235,17 @@ const MePage = () => {
           </View>
         </>
       )}
-  
+
+        <View style={styles.bioSection}>
+          <Text style={styles.sectionTitle}>Location</Text>
+          <Text style={styles.infoText}>{location}</Text>
+        </View>
+        
       <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
         <Text style={styles.logoutButtonText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
   );
-  
 };
 
 export default MePage;

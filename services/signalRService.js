@@ -1,12 +1,14 @@
 import * as signalR from '@microsoft/signalr';
-
+import { LogBox } from 'react-native';
 let connection = null;
-
+LogBox.ignoreLogs([
+    "WebSocket failed to connect",
+    "Failed to start the transport 'WebSockets'",
+  ]);
 export const startSignalRConnection = async (token, onHandlers = {}) => {
   connection = new signalR.HubConnectionBuilder()
     .withUrl("https://api.matchaapp.net/hub/ChatHub", {
       accessTokenFactory: () => token,
-      transport: signalR.HttpTransportType.LongPolling,
     })
     .withAutomaticReconnect([0, 2000, 5000, 10000])
     .configureLogging(signalR.LogLevel.Information)
@@ -21,10 +23,21 @@ export const startSignalRConnection = async (token, onHandlers = {}) => {
     if (onHandlers.OnlineMatches) onHandlers.OnlineMatches(matches);
   });
 
+  
+
   try {
-    await connection.start();
+    try {
+        await connection.start();
+        console.log("✅ SignalR connection started");
+      } catch (error) {
+        if (__DEV__) {
+          console.warn("⚠️ SignalR connection failed to start silently:", error?.message || error);
+        }
+        // Silent fail: do not alert or propagate
+      }
     console.log("✅ SignalR connected.");
   } catch (error) {
+    // Log the error to the console silently, but do not show it to the user.
     console.error("❌ SignalR connection failed:", error);
   }
 };
@@ -37,13 +50,20 @@ export const sendMessage = async (senderProfileId, receiverProfileId, message) =
     return;
   }
 
+  if (!senderProfileId || !receiverProfileId) {
+    console.warn("❗ Cannot send message. Missing sender or receiver profile ID:", {
+      senderProfileId,
+      receiverProfileId,
+      message,
+    });
+    return;
+  }
+
   try {
     console.log("📩 Sending message:", senderProfileId.toString(), receiverProfileId.toString(), message);
     await connection.invoke("SendMessage", senderProfileId.toString(), receiverProfileId.toString(), message);
   } catch (error) {
-    console.log("📩 Sending message:", senderProfileId.toString(), receiverProfileId.toString(), message);
     console.error("❌ SendMessage error:", error);
-    throw error;
   }
 };
 

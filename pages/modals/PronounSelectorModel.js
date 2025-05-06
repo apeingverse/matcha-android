@@ -2,9 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import modalStyles from './modalStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRoute, useNavigation } from '@react-navigation/native';
 
-const PronounSelectorModal = ({ route, navigation }) => {
-  const { selectedPronoun, onSelect } = route.params;
+const PronounSelectorModal = () => {
+  const route = useRoute();
+  const navigation = useNavigation();
+  const { selectedPronoun, setPronoun, setPronounName } = route.params;
+
   const [pronouns, setPronouns] = useState([]);
   const [current, setCurrent] = useState(selectedPronoun);
 
@@ -20,6 +24,13 @@ const PronounSelectorModal = ({ route, navigation }) => {
 
     fetchPronouns();
   }, []);
+
+  const handleDone = () => {
+    const selected = pronouns.find(p => p.id === current);
+    setPronoun(current);
+    setPronounName(selected?.name || '');
+    navigation.goBack();
+  };
 
   return (
     <View style={modalStyles.container}>
@@ -52,13 +63,7 @@ const PronounSelectorModal = ({ route, navigation }) => {
         ))}
       </ScrollView>
 
-      <TouchableOpacity
-        style={modalStyles.doneButton}
-        onPress={() => {
-          onSelect(current);
-          navigation.goBack();
-        }}
-      >
+      <TouchableOpacity style={modalStyles.doneButton} onPress={handleDone}>
         <Text style={modalStyles.doneButtonText}>Done</Text>
       </TouchableOpacity>
     </View>

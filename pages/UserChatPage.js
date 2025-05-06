@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  View, Text, StyleSheet, TouchableOpacity, TextInput, Image,
-  ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator
+  View, StyleSheet, TouchableOpacity, TextInput, Image,
+  ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator, Linking
 } from 'react-native';
+import chatIcon from '../assets/images/LogoPNG.png';
+import MatchUserCard from '../components/MatchUserCard';
+import * as ImagePicker from 'react-native-image-picker';
+import DocumentPicker from 'react-native-document-picker';
+import { Platform as RNPlatform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import Ionicons from 'react-native-vector-icons/Ionicons';
-import Entypo from 'react-native-vector-icons/Entypo';
-import MaterialCommunityIcons from 'react-native-vector-icons/MaterialCommunityIcons';
+import { Text } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { 
@@ -17,7 +20,149 @@ import {
   deleteMessage
 } from '../services/signalRService';
 
+const MessageTypes = {
+    TEXT: 1,
+    IMAGE: 2,
+    AUDIO: 4,
+    FILE: 5,
+  };
+
 const UserChatPage = () => {
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [aiVisible, setAiVisible] = useState(false);
+  const [aiUsed, setAiUsed] = useState(false);
+  const [showUserCard, setShowUserCard] = useState(false);
+  const [matchModeEnum, setMatchModeEnum] = useState(null);
+  useEffect(() => {
+    const fetchMatchMode = async () => {
+      const activeMatchType = (await AsyncStorage.getItem('activeMatchType'))?.toLowerCase();
+      const modeMap = {
+        dating: 1,
+        casual: 2,
+        sport: 3,
+        business: 4,
+        study: 5,
+      };
+      if (activeMatchType && modeMap[activeMatchType]) {
+        setMatchModeEnum(modeMap[activeMatchType]);
+      }
+    };
+    fetchMatchMode();
+  }, []);
+  const fetchAIResponses = async () => {
+    if (aiSuggestions.length > 0 && !aiUsed) {
+      setAiVisible(prev => !prev);
+      return;
+    }
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+      const res = await fetch(`https://api.matchaapp.net/api/Chat/GetAIChatHelp?matchId=${matchId}`, {
+        method: 'GET',
+        headers: {
+          Accept: 'text/plain',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const data = await res.json();
+      if (data?.response) {
+        const { response1, response2, response3 } = data.response;
+        setAiSuggestions([response1, response2, response3]);
+        setAiVisible(true);
+        setAiUsed(false);
+      }
+    } catch (err) {
+      console.warn("AI chat help fetch failed", err);
+    }
+  };
+  const showAttachmentOptions = () => {
+    Alert.alert(
+      'Send...',
+      'Choose the type of attachment',
+      [
+        { text: 'Photo', onPress: () => pickMedia('photo') },
+        { text: 'Audio', onPress: () => pickDocument('audio') },
+        { text: 'File', onPress: () => pickDocument('file') },
+        { text: 'Cancel', style: 'cancel' },
+      ]
+    );
+  };
+
+  const pickMedia = (type) => {
+    ImagePicker.launchImageLibrary(
+      {
+        mediaType: 'photo',
+        quality: 0.8,
+      },
+      async (response) => {
+        if (response.didCancel || response.errorCode) return;
+        const uri = response.assets && response.assets[0]?.uri;
+        if (uri) sendMediaMessage(uri, MessageTypes.IMAGE);
+      }
+    );
+  };
+
+  const pickDocument = async (type) => {
+    try {
+      const res = await DocumentPicker.pickSingle({
+        type: type === 'audio' ? [DocumentPicker.types.audio] : [DocumentPicker.types.allFiles],
+      });
+      sendMediaMessage(res.uri, type === 'audio' ? MessageTypes.AUDIO : MessageTypes.FILE);
+    } catch (err) {
+      if (!DocumentPicker.isCancel(err)) console.warn("File pick error:", err);
+    }
+  };
+
+  const sendMediaMessage = async (uri, type) => {
+    if (!currentUserId) return;
+
+    try {
+      const token = await AsyncStorage.getItem('accessToken');
+
+      const formData = new FormData();
+      formData.append('photo', {
+        uri,
+        name: `photo_${Date.now()}.jpg`,
+        type: 'image/jpeg',
+      });
+
+      const endpoint = 'SendPhotoAttachment';
+
+      const res = await fetch(
+        `https://api.matchaapp.net/api/Chat/${endpoint}?senderProfileId=${currentUserId}&receiverProfileId=${receiverProfileId}`,
+        {
+          method: 'POST',
+          headers: {
+            Accept: 'text/plain',
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'multipart/form-data',
+          },
+          body: formData,
+        }
+      );
+
+      const data = await res.json();
+
+      if (data?.response?.url) {
+        const message = {
+          id: Date.now(),
+          content: data.response.url,
+          senderProfileId: currentUserId,
+          receiverProfileId,
+          type,
+          timeStamp: new Date().toISOString(),
+          isRead: false,
+          isDeleted: false,
+          isModified: false,
+        };
+        setMessages(prev => [...prev, message]);
+      } else {
+        console.warn("Upload succeeded but no URL returned:", data);
+      }
+    } catch (error) {
+      console.error("Media upload failed:", error);
+      alert("Failed to upload file.");
+    }
+  };
   const navigation = useNavigation();
   const route = useRoute();
   const { matchId, user, senderProfileId, receiverProfileId } = route.params;
@@ -26,53 +171,106 @@ const UserChatPage = () => {
   const [inputText, setInputText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [isUserOnline, setIsUserOnline] = useState(false);
+  const [signalRConnected, setSignalRConnected] = useState(false);
   const scrollRef = useRef();
   const messageInputRef = useRef();
+  const [currentUserId, setCurrentUserId] = useState(null);
 
   useEffect(() => {
     const setupSignalR = async () => {
+      // Use closure-safe receiverId from route.params at invocation time
+      const receiverId = route.params?.receiverProfileId;
       try {
         const token = await AsyncStorage.getItem('accessToken');
-        if (!token) return;
+        const userData = await AsyncStorage.getItem('user');
+        const activeMatchType = await AsyncStorage.getItem('activeMatchType');
+        if (!token || !userData || !activeMatchType) {
+            console.log(token, userData, activeMatchType);
+          console.warn("Missing token, user data, or activeMatchType.");
+          
+        }
 
+        let parsedUser;
+        try {
+            console.log("Parsing user data:", userData);
+          parsedUser = JSON.parse(userData);
+        } catch (err) {
+          console.warn("Failed to parse user data:", err);
+          return;
+        }
+
+        let senderId = route.params?.senderProfileId;
+
+        if (!senderId) {
+          switch (activeMatchType.toLowerCase()) {
+            case 'dating':
+              senderId = parsedUser?.datingProfileId;
+              break;
+            case 'business':
+              senderId = parsedUser?.businessProfileId;
+              break;
+            case 'study':
+              senderId = parsedUser?.studyProfileId;
+              break;
+            case 'casual':
+              senderId = parsedUser?.casualProfileId;
+              break;
+            case 'sports':
+              senderId = parsedUser?.sportsProfileId;
+              break;
+            default:
+              console.warn("Unrecognized match type:", activeMatchType);
+          }
+        }
+
+        if (!senderId) {
+          console.warn("Parsed user profile ID missing or invalid user object:", parsedUser);
+          return;
+        }
+
+        setCurrentUserId(senderId);
+
+        console.log("Connecting to SignalR with sender:", senderId, "receiver:", receiverId);
         await startSignalRConnection(token, {
-            ReceiveMessage: (id, receiverId, text) => {
-                const message = {
-                  id: id,
-                  content: text,
-                  senderProfileId: receiverId,
-                  receiverProfileId: senderProfileId,
-                  timeStamp: new Date().toISOString(),
-                  isRead: false,
-                  isDeleted: false,
-                  isModified: false,
-                  type: 0
-                };
-              
-                setMessages(prev => [...prev, message]);
-                markMessagesAsRead(senderProfileId, receiverProfileId, matchId);
-              }
-              
-              ,
+          senderProfileId: senderId,
+          receiverProfileId: receiverId,
+          matchModeType: activeMatchType,
+          ReceiveMessage: (id, senderIdFromServer, text) => {
+            console.log("Received message ama burası:", id, senderIdFromServer, text, receiverId);
+            const message = {
+              id: id,
+              content: text,
+              senderProfileId: senderIdFromServer,
+              receiverProfileId: receiverId,
+              timeStamp: new Date().toISOString(),
+              isRead: false,
+              isDeleted: false,
+              isModified: false,
+              type: 1
+            };
+            console.log("Parsed message:", message);
+            setMessages(prev => [...prev, message]);
+            markMessagesAsRead(senderProfileId, receiverProfileId, matchId);
+          },
           UserOnline: (profileId) => {
-            if (profileId === receiverProfileId) setIsUserOnline(true);
+            if (profileId === receiverId) setIsUserOnline(true);
           },
           UserOffline: (profileId) => {
-            if (profileId === receiverProfileId) setIsUserOnline(false);
+            if (profileId === receiverId) setIsUserOnline(false);
           },
           OnlineMatches: (matches) => {
-            if (matches.includes(receiverProfileId)) setIsUserOnline(true);
+            if (matches.includes(receiverId)) setIsUserOnline(true);
           },
           MessageDeleted: (messageId) => {
-            setMessages(prev => prev.map(msg => 
+            setMessages(prev => prev.map(msg =>
               msg.id === messageId ? { ...msg, content: "This message was deleted", isDeleted: true } : msg
             ));
           }
         });
-
-        fetchMessages();
-      } catch (error) {
-        console.error("SignalR setup error:", error);
+        setSignalRConnected(true);
+        await fetchMessages(senderId);
+    } catch (error) {
+        console.log("SignalR setup failed silently:", error?.message || error);
       }
     };
 
@@ -81,7 +279,7 @@ const UserChatPage = () => {
     return () => stopConnection();
   }, []);
 
-  const fetchMessages = async () => {
+  const fetchMessages = async (senderId) => {
     setIsLoading(true);
     const token = await AsyncStorage.getItem('accessToken');
     try {
@@ -91,7 +289,20 @@ const UserChatPage = () => {
           Accept: 'text/plain',
         },
       });
-      const data = await res.json();
+      let data;
+      if (res.ok) {
+        data = await res.json();
+      } else if (res.status === 404) {
+        console.warn("No previous messages found for this match ID.");
+        setMessages([]); // Just set an empty message list
+        setIsLoading(false);
+        return;
+      } else {
+        const text = await res.text();
+        console.error("❌ Upload failed:", res.status, text);
+        console.warn("Upload failed. Check your token or file format.");
+        return;
+      }
       if (data?.response) {
         const parsedMessages = data.response.map(msg => ({
           ...msg,
@@ -105,7 +316,7 @@ const UserChatPage = () => {
         );
       
         if (unread.length > 0) {
-          markMessagesAsRead(senderProfileId, receiverProfileId, matchId);
+          markMessagesAsRead(senderId, receiverProfileId, matchId);
         }
       }
       
@@ -118,14 +329,19 @@ const UserChatPage = () => {
 
   const handleSendMessage = async () => {
     if (!inputText.trim()) return;
+    if (!currentUserId) {
+      console.warn("Sender ID is still null. Blocked sendMessage:", inputText);
+      return;
+    }
     try {
-      await sendMessage(senderProfileId, receiverProfileId, inputText);
+        console.log("Sending from:", currentUserId, "to:", receiverProfileId, "msg:", inputText);
+      await sendMessage(currentUserId, receiverProfileId, inputText);
       setMessages(prev => [...prev, {
         id: Date.now(),
         content: inputText,
-        senderProfileId,
+        senderProfileId: currentUserId,
         receiverProfileId,
-        type: 0,
+        type: MessageTypes.TEXT,
         timeStamp: new Date().toISOString(),
         isRead: false,
         isDeleted: false,
@@ -133,7 +349,6 @@ const UserChatPage = () => {
       }]);
       setInputText('');
     } catch (err) {
-        console.log(senderProfileId, receiverProfileId, inputText);
       console.error("Send message error:", err);
       alert("Failed to send message.");
     }
@@ -141,7 +356,7 @@ const UserChatPage = () => {
 
   const confirmDeleteMessage = async (msg) => {
     try {
-      await deleteMessage(senderProfileId, receiverProfileId, msg.id);
+      await deleteMessage(currentUserId, receiverProfileId, msg.id);
       setMessages(prev => prev.map(m =>
         m.id === msg.id ? { ...m, content: "This message was deleted", isDeleted: true } : m
       ));
@@ -152,7 +367,7 @@ const UserChatPage = () => {
   };
 
   const handleLongPressMessage = (msg) => {
-    if (msg.senderProfileId === senderProfileId) {
+    if (msg.senderProfileId === currentUserId) {
       confirmDeleteMessage(msg);
     }
   };
@@ -169,6 +384,15 @@ const UserChatPage = () => {
     }
   }, [messages]);
 
+  if (!signalRConnected) {
+    return (
+      <SafeAreaView style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#FFD54F" />
+        <Text style={{ marginTop: 10 }}>Connecting to chat...</Text>
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safeArea}>
       <KeyboardAvoidingView
@@ -178,15 +402,17 @@ const UserChatPage = () => {
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={26} color="#000" />
+            <Text style={{ fontSize: 20 }}>←</Text>
           </TouchableOpacity>
           <Image source={{ uri: user?.profilePicture }} style={styles.avatar} />
           <View style={styles.headerUserInfo}>
-            <Text style={styles.userName}>{user?.fullName}</Text>
+            <TouchableOpacity onPress={() => setShowUserCard(true)}>
+              <Text style={styles.userName}>{user?.fullName}</Text>
+            </TouchableOpacity>
             {isUserOnline && <Text style={styles.onlineStatus}>Online</Text>}
           </View>
           <TouchableOpacity style={styles.dots}>
-            <Entypo name="dots-three-vertical" size={20} color="#000" />
+            <Text style={{ fontSize: 20 }}>⋮</Text>
           </TouchableOpacity>
         </View>
 
@@ -195,49 +421,94 @@ const UserChatPage = () => {
             <ActivityIndicator size="large" color="#FFD54F" />
           </View>
         ) : (
-          <ScrollView
-            style={styles.chatBody}
-            contentContainerStyle={{ paddingBottom: 20 }}
-            ref={scrollRef}
-            onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
-          >
-            {messages.map((msg, i) => (
-              <TouchableOpacity
-                key={i}
-                onLongPress={() => handleLongPressMessage(msg)}
-                activeOpacity={msg.senderProfileId === senderProfileId ? 0.6 : 1}
-              >
-                <View
-                  style={[
-                    styles.messageBubble,
-                    msg.senderProfileId === senderProfileId ? styles.myMsg : styles.otherMsg,
-                    msg.isDeleted && styles.deletedMsg
-                  ]}
+          <>
+            <ScrollView
+              style={styles.chatBody}
+              contentContainerStyle={{ paddingBottom: 20 }}
+              ref={scrollRef}
+              onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: true })}
+            >
+              {messages.map((msg, i) => (
+                <TouchableOpacity
+                  key={i}
+                  onLongPress={() => handleLongPressMessage(msg)}
+                  activeOpacity={msg.senderProfileId === currentUserId ? 0.6 : 1}
                 >
-                  <Text style={msg.isDeleted ? styles.deletedText : null}>
-                    {msg.content}
-                  </Text>
-                  <View style={styles.messageFooter}>
-                    <Text style={styles.messageTime}>
-                      {formatMessageTime(msg.timeStamp)}
-                    </Text>
-                    {msg.senderProfileId === senderProfileId && (
-                      <Ionicons
-                        name={msg.isRead ? "checkmark-done" : "checkmark"}
-                        size={16}
-                        color={msg.isRead ? "#4CAF50" : "#999"}
-                      />
+                  <View
+                    style={[
+                      styles.messageBubble,
+                      msg.senderProfileId === currentUserId ? styles.myMsg : styles.otherMsg,
+                      msg.isDeleted && styles.deletedMsg
+                    ]}
+                  >
+                    {msg.isDeleted ? (
+                      <Text style={styles.deletedText}>This message was deleted</Text>
+                    ) : (
+                      <>
+                        {msg.type === MessageTypes.TEXT && <Text>{msg.content}</Text>}
+
+                        {msg.type === MessageTypes.IMAGE && (
+                          <Image source={{ uri: msg.content }} style={styles.mediaImage} />
+                        )}
+
+                        {msg.type === MessageTypes.AUDIO && (
+                          <Text style={{ color: '#555' }}>🎵 Audio message</Text>
+                        )}
+
+                        {msg.type === MessageTypes.FILE && (
+                          <TouchableOpacity onPress={() => Linking.openURL(msg.content)}>
+                            <Text style={{ color: 'blue' }}>📎 Download file</Text>
+                          </TouchableOpacity>
+                        )}
+                      </>
                     )}
+                    <View style={styles.messageFooter}>
+                      <Text style={styles.messageTime}>
+                        {formatMessageTime(msg.timeStamp)}
+                      </Text>
+                      {msg.senderProfileId === currentUserId && (
+                        <Text style={{ fontSize: 12, color: msg.isRead ? "#4CAF50" : "#999" }}>{msg.isRead ? '✔✔' : '✔'}</Text>
+                      )}
+                    </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+            {aiVisible && aiSuggestions.length > 0 && (
+              <View style={{ paddingHorizontal: 12, marginBottom: 10 }}>
+                {aiSuggestions.map((s, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => {
+                      setInputText(s);
+                      setAiVisible(false);
+                      setAiUsed(true);
+                    }}
+                    style={{
+                      backgroundColor: '#f2f2f2',
+                      padding: 12,
+                      borderRadius: 12,
+                      marginBottom: 6,
+                      borderColor: idx % 2 === 0 ? '#ff5e57' : '#4b7bec',
+                      borderWidth: 1.5,
+                      shadowColor: '#000',
+                      shadowOffset: { width: 0, height: 1 },
+                      shadowOpacity: 0.1,
+                      shadowRadius: 2,
+                      elevation: 2,
+                    }}
+                  >
+                    <Text style={{ fontWeight: '600' }}>{s}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
+          </>
         )}
 
         <View style={styles.bottomBar}>
-          <TouchableOpacity>
-            <Ionicons name="image-outline" size={24} color="#333" />
+          <TouchableOpacity onPress={() => showAttachmentOptions()}>
+            <Text style={{ fontSize: 24, color: "#333" }}>＋</Text>
           </TouchableOpacity>
           <TextInput
             ref={messageInputRef}
@@ -248,9 +519,19 @@ const UserChatPage = () => {
             onSubmitEditing={handleSendMessage}
           />
           <TouchableOpacity onPress={handleSendMessage} style={styles.sendButton}>
-            <Ionicons name="send" size={24} color="#fff" />
+            <Text style={{ fontSize: 20, color: 'white' }}>➤</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={fetchAIResponses}>
+            <Image source={chatIcon} style={{ width: 30, height: 30, marginLeft: 8 }} />
           </TouchableOpacity>
         </View>
+        {showUserCard && matchModeEnum && (
+          <MatchUserCard
+            profileId={receiverProfileId}
+            matchModeEnum={matchModeEnum}
+            onClose={() => setShowUserCard(false)}
+          />
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -346,6 +627,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginLeft: 8,
+  },
+  mediaImage: {
+    width: 200,
+    height: 200,
+    borderRadius: 10,
+    marginVertical: 5,
   },
 });
 

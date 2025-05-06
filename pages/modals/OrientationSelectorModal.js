@@ -4,7 +4,7 @@ import modalStyles from './modalStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const OrientationSelectorModal = ({ route, navigation }) => {
-  const { selectedOrientations, onSelect } = route.params;
+  const { selectedOrientations = [], onSelect } = route.params;
   const [orientations, setOrientations] = useState([]);
   const [current, setCurrent] = useState(selectedOrientations || []);
 
@@ -27,6 +27,18 @@ const OrientationSelectorModal = ({ route, navigation }) => {
     } else {
       setCurrent([...current, id]);
     }
+  };
+
+  const handleDone = () => {
+    const selectedNames = orientations
+      .filter((item) => current.includes(item.id))
+      .map((item) => item.name);
+
+    if (typeof onSelect === 'function') {
+      onSelect(current, selectedNames);
+    }
+
+    navigation.goBack();
   };
 
   return (
@@ -62,10 +74,7 @@ const OrientationSelectorModal = ({ route, navigation }) => {
 
       <TouchableOpacity
         style={modalStyles.doneButton}
-        onPress={() => {
-          onSelect(current);
-          navigation.goBack();
-        }}
+        onPress={handleDone}
       >
         <Text style={modalStyles.doneButtonText}>Done</Text>
       </TouchableOpacity>

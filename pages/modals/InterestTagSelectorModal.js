@@ -2,9 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView } from 'react-native';
 import modalStyles from './modalStyles';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRoute, useNavigation } from '@react-navigation/native';
 
-const InterestTagSelectorModal = ({ route, navigation }) => {
+const InterestTagSelectorModal = () => {
+  const route = useRoute();
+  const navigation = useNavigation();
   const { selectedTags, onSelect } = route.params;
+
   const [allTags, setAllTags] = useState([]);
   const [current, setCurrent] = useState(selectedTags || []);
 
@@ -27,6 +31,24 @@ const InterestTagSelectorModal = ({ route, navigation }) => {
     } else {
       setCurrent([...current, id]);
     }
+  };
+
+  const handleDone = () => {
+    if (current.length < 3) {
+      alert('Please select at least 3 interest tags.');
+      return;
+    }
+    if (current.length > 10) {
+      alert('You can select a maximum of 10 interest tags.');
+      return;
+    }
+  
+    const selectedNames = allTags
+      .filter((tag) => current.includes(tag.id))
+      .map((tag) => tag.name);
+  
+    onSelect(current, selectedNames); // Send IDs and names back
+    navigation.goBack();
   };
 
   return (
@@ -60,13 +82,7 @@ const InterestTagSelectorModal = ({ route, navigation }) => {
         ))}
       </ScrollView>
 
-      <TouchableOpacity
-        style={modalStyles.doneButton}
-        onPress={() => {
-          onSelect(current);
-          navigation.goBack();
-        }}
-      >
+      <TouchableOpacity style={modalStyles.doneButton} onPress={handleDone}>
         <Text style={modalStyles.doneButtonText}>Done</Text>
       </TouchableOpacity>
     </View>

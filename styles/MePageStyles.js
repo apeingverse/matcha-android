@@ -1,12 +1,46 @@
 import { StyleSheet } from 'react-native';
 
 const MePageStyles = StyleSheet.create({
+
+
+  badgeRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginBottom: 10,
+    gap: 10,
+  },
+  
+  pill: {
+    width: 120,               // All pills same width
+    paddingVertical: 6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 15,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 0.1,
+    borderColor: '#000000',
+    marginHorizontal: 5,       // For spacing if gap doesn't work
+  },
+  
+  pillText: {
+    fontSize: 13,
+    color: '#000000',
+    fontWeight: '600',
+  },
+
   container: {
     flex: 0,
     backgroundColor: '#FFFDF1',
   },
   contentContainer: {
     paddingBottom: 150, // Ensure there's space at the bottom for better scrolling experience
+  },
+  ageText: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#000',
+    marginTop: 2,
+    marginBottom: 5,
   },
   header: {
     flexDirection: 'row',
@@ -183,5 +217,7 @@ const MePageStyles = StyleSheet.create({
     borderColor: '#FAF9F6',
   },
 });
+
+
 
 export default MePageStyles;
