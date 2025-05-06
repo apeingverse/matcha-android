@@ -4,6 +4,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Image, ScrollView } from 'rea
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useNavigation } from '@react-navigation/native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Swipeable } from 'react-native-gesture-handler';
 
 const modeNames = {
   1: 'Date',
@@ -19,7 +20,8 @@ const ChatPage = () => {
   const navigation = useNavigation();
 
   useEffect(() => {
-    fetchMatches();
+    const interval = setInterval(fetchMatches, 100); // fetch every 5 seconds
+    return () => clearInterval(interval);
   }, [activeMode]);
 
   const fetchMatches = async () => {
@@ -31,78 +33,158 @@ const ChatPage = () => {
       },
     });
     const data = await res.json();
-    const filtered = (data.response || []).filter(item => item.matchModeType === activeMode);
+    const filtered = (data.response || [])
+      .filter(item => item.matchModeType === activeMode)
+      .sort((a, b) => {
+        const timeA = new Date(a.lastMessage?.timeStamp || 0).getTime();
+        const timeB = new Date(b.lastMessage?.timeStamp || 0).getTime();
+        return timeB - timeA;
+      });
     setMatches(filtered);
+  };
+
+  // Remove match handler
+  const removeMatch = async (profileId) => {
+    console.log("🗑 Removing match with profileId:", profileId);
+    const token = await AsyncStorage.getItem('accessToken');
+    try {
+      const res = await fetch(`https://api.matchaapp.net/api/Match/RemoveMatch?otherProfileId=${profileId}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'text/plain',
+        },
+      });
+      console.log("🧾 API request URL:", `https://api.matchaapp.net/api/Match/RemoveMatch?otherProfileId=${profileId}`);
+      const json = await res.json();
+      console.log("🧾 API Response JSON:", json);
+
+      if (res.ok && json.response === true) {
+        console.log("✅ Match removed successfully.");
+        setMatches(prev => prev.filter(item => item.profileId !== profileId));
+      } else {
+        console.warn("❗ Unexpected response while removing match:", json);
+      }
+
+    } catch (err) {
+      console.error("Failed to remove match:", err);
+    }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.modeSelector}>
-        {Object.entries(modeNames).map(([key, label]) => (
-          <TouchableOpacity key={key} onPress={() => setActiveMode(Number(key))}>
-            <Text style={[styles.modeLabel, activeMode === Number(key) && styles.activeMode]}>
-              {label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
       <ScrollView style={{ padding: 15 }} contentContainerStyle={{ paddingBottom: 80 }}>
         <Text style={styles.header}>Chats</Text>
-        {matches.map((item) => (
-          <TouchableOpacity
-            key={item.profileId}
-            style={styles.userBar}
-            onPress={async () => {
-              const token = await AsyncStorage.getItem('accessToken');
-              const matchType = modeNames[activeMode].toLowerCase();
-
-              const res = await fetch('https://api.matchaapp.net/api/Profile/GetLoggedInUserProfileState', {
-                headers: {
-                  Authorization: `Bearer ${token}`,
-                  Accept: 'application/json',
-                },
-              });
-
-              const profileState = await res.json();
-              const profileData = profileState?.response;
-
-              const profileIdMap = {
-                date: profileData?.datingProfileId,
-                casual: profileData?.casualProfileId,
-                sport: profileData?.sportsProfileId,
-                business: profileData?.businessProfileId,
-                study: profileData?.studyProfileId,
-              };
-
-              const senderProfileId = profileIdMap[matchType];
-
-              if (!senderProfileId) {
-                console.warn("❌ Could not resolve senderProfileId from profile state. Debug:", { profileData, matchType });
-                return;
-              }
-
-              await AsyncStorage.setItem('activeMatchType', matchType);
-
-              navigation.navigate('UserChatPage', {
-                matchId: item.matchId,
-                receiverProfileId: item.profileId,
-                senderProfileId,
-                matchType,
-                user: {
-                  fullName: item.fullName,
-                  profilePicture: item.profilePicture,
-                }
-              });
-            }}
-          >
-            <Image source={{ uri: item.profilePicture }} style={styles.avatar} />
-            <View>
-              <Text style={styles.name}>{item.fullName}</Text>
-              <Text style={styles.message} numberOfLines={1}>
-                {item.lastMessage?.content || 'No messages yet'}
+        <View style={styles.modeSelector}>
+          {Object.entries(modeNames).map(([key, label]) => (
+            <TouchableOpacity key={key} onPress={() => setActiveMode(Number(key))}>
+              <Text style={[styles.modeLabel, activeMode === Number(key) && styles.activeMode]}>
+                {label}
               </Text>
-            </View>
-          </TouchableOpacity>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {matches.map((item) => (
+          <Swipeable
+            key={item.profileId}
+            renderRightActions={() => (
+              <TouchableOpacity
+                onPress={() => removeMatch(item.profileId)}
+                style={{
+                  backgroundColor: 'red',
+                  justifyContent: 'center',
+                  alignItems: 'center',
+                  width: 100,
+                  marginVertical: 10,
+                  borderRadius: 10,
+                }}
+              >
+                <Text style={{ color: 'white', fontWeight: 'bold' }}>Remove</Text>
+              </TouchableOpacity>
+            )}
+          >
+            <TouchableOpacity
+              style={styles.userBar}
+              onPress={async () => {
+                const token = await AsyncStorage.getItem('accessToken');
+                const matchType = modeNames[activeMode].toLowerCase();
+
+                const res = await fetch('https://api.matchaapp.net/api/Profile/GetLoggedInUserProfileState', {
+                  headers: {
+                    Authorization: `Bearer ${token}`,
+                    Accept: 'application/json',
+                  },
+                });
+
+                const profileState = await res.json();
+                const profileData = profileState?.response;
+
+                const profileIdMap = {
+                  date: profileData?.datingProfileId,
+                  casual: profileData?.casualProfileId,
+                  sport: profileData?.sportsProfileId,
+                  business: profileData?.businessProfileId,
+                  study: profileData?.studyProfileId,
+                };
+
+                const senderProfileId = profileIdMap[matchType];
+
+                if (!senderProfileId) {
+                  console.warn("❌ Could not resolve senderProfileId from profile state. Debug:", { profileData, matchType });
+                  return;
+                }
+
+                await AsyncStorage.setItem('activeMatchType', matchType);
+
+                navigation.navigate('UserChatPage', {
+                  matchId: item.matchId,
+                  receiverProfileId: item.profileId,
+                  senderProfileId,
+                  matchType,
+                  user: {
+                    fullName: item.fullName,
+                    profilePicture: item.profilePicture,
+                  }
+                });
+              }}
+            >
+              <Image source={{ uri: item.profilePicture }} style={styles.avatar} />
+              <View style={{ flex: 1 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={styles.name}>{item.fullName}</Text>
+                  <Text style={{ fontSize: 12, color: '#888' }}>
+                    {item.lastMessage?.timeStamp ? new Date(item.lastMessage.timeStamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={styles.message} numberOfLines={1}>
+                    {item.lastMessage
+                      ? item.lastMessage.senderProfileId === item.profileId
+                        ? item.lastMessage.type === 2
+                          ? '📷 Image'
+                          : item.lastMessage.type === 4
+                          ? '🎵 Audio'
+                          : item.lastMessage.type === 5
+                          ? '📎 File'
+                          : item.lastMessage.content
+                        : item.lastMessage.type === 2
+                        ? 'You: 📷 Image'
+                        : item.lastMessage.type === 4
+                        ? 'You: 🎵 Audio'
+                        : item.lastMessage.type === 5
+                        ? 'You: 📎 File'
+                        : `You: ${item.lastMessage.content}`
+                      : 'No messages yet'}
+                  </Text>
+                  {item.lastMessage?.senderProfileId !== item.profileId && (
+                    <Text style={{ fontSize: 10, color: item.lastMessage?.isRead ? '#1E90FF' : '#000' }}>
+                      ✔✔
+                    </Text>
+                  )}
+                </View>
+              </View>
+            </TouchableOpacity>
+          </Swipeable>
         ))}
       </ScrollView>
     </SafeAreaView>
@@ -119,9 +201,9 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
   },
-  avatar: { width: 50, height: 50, borderRadius: 25, marginRight: 10 },
-  name: { fontSize: 16, fontWeight: '600' },
-  message: { fontSize: 14, color: '#555', marginTop: 2 },
+  avatar: { width: 65, height: 65, borderRadius: 32.5, marginRight: 12 },
+  name: { fontSize: 16, fontWeight: 'bold' },
+  message: { fontSize: 14, color: '#555', marginTop: 2, fontWeight: '400' },
   modeSelector: {
     flexDirection: 'row',
     justifyContent: 'space-around',

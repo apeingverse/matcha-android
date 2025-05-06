@@ -387,7 +387,7 @@ const UserChatPage = () => {
   if (!signalRConnected) {
     return (
       <SafeAreaView style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#FFD54F" />
+        <ActivityIndicator size="large" color="#DAE8A1" />
         <Text style={{ marginTop: 10 }}>Connecting to chat...</Text>
       </SafeAreaView>
     );
@@ -406,7 +406,10 @@ const UserChatPage = () => {
           </TouchableOpacity>
           <Image source={{ uri: user?.profilePicture }} style={styles.avatar} />
           <View style={styles.headerUserInfo}>
-            <TouchableOpacity onPress={() => setShowUserCard(true)}>
+            <TouchableOpacity onPress={() => {
+              console.log("Name clicked");
+              setShowUserCard(true);
+            }}>
               <Text style={styles.userName}>{user?.fullName}</Text>
             </TouchableOpacity>
             {isUserOnline && <Text style={styles.onlineStatus}>Online</Text>}
@@ -526,11 +529,36 @@ const UserChatPage = () => {
           </TouchableOpacity>
         </View>
         {showUserCard && matchModeEnum && (
-          <MatchUserCard
-            profileId={receiverProfileId}
-            matchModeEnum={matchModeEnum}
-            onClose={() => setShowUserCard(false)}
-          />
+          <View
+            style={{
+              ...StyleSheet.absoluteFillObject,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              zIndex: 9999,
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
+            {console.log("Rendering MatchUserCard modal")}
+            <View style={{ position: 'relative', width: '90%', maxHeight: '80%' }}>
+              <TouchableOpacity
+                style={{ position: 'absolute', top: -10, right: -10, zIndex: 1000 }}
+                onPress={() => {
+                  console.log("Close button clicked");
+                  setShowUserCard(false);
+                }}
+              >
+                <Text style={{ fontSize: 28, color: '#fff' }}>✕</Text>
+              </TouchableOpacity>
+              <MatchUserCard
+                profileId={receiverProfileId}
+                matchModeEnum={matchModeEnum}
+                onClose={() => {
+                  console.log("MatchUserCard onClose called");
+                  setShowUserCard(false);
+                }}
+              />
+            </View>
+          </View>
         )}
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -577,7 +605,7 @@ const styles = StyleSheet.create({
   },
   myMsg: {
     alignSelf: 'flex-end',
-    backgroundColor: '#FFD54F',
+    backgroundColor: '#DAE8A1',
     borderBottomRightRadius: 4,
   },
   otherMsg: {
@@ -620,7 +648,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   sendButton: {
-    backgroundColor: '#FFD54F',
+    backgroundColor: '#DAE8A1',
     width: 40,
     height: 40,
     borderRadius: 20,

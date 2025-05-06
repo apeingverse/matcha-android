@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Image,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import styles from '../styles/MePageStyles';
 import { useMatchType } from '../contexts/MatchTypeContext';
@@ -51,6 +52,7 @@ const MePage = ({ handleLogout }) => {
     matchGender: [],
     tags: [],
   });
+  const [menuVisible, setMenuVisible] = useState(false);
 
   const fetchWithAuth = async (url, method = 'GET', body = null) => {
     const token = await AsyncStorage.getItem('accessToken');
@@ -76,6 +78,32 @@ const MePage = ({ handleLogout }) => {
     const loadData = async () => {
       try {
         setLoading(true);
+
+        const profileState = await fetchWithAuth('/api/Profile/GetLoggedInUserProfileState');
+        const isCreatedField = {
+          Date: 'isDatingProfileCreated',
+          Casual: 'isCasualProfileCreated',
+          Sport: 'isSportsProfileCreated',
+          Business: 'isBusinessProfileCreated',
+          Study: 'isStudyProfileCreated',
+        }[activeSelection];
+
+        if (!profileState.response?.[isCreatedField]) {
+          setProfileInfo(null);
+          setPhotos([]);
+          setResolvedData({
+            gender: '',
+            pronoun: '',
+            orientation: [],
+            matchGender: [],
+            tags: [],
+          });
+          setLocation(null);
+          setUserInfo(null);
+          setLoading(false);
+          return;
+        }
+
         const userRes = await fetchWithAuth('/api/Authentication/Profile');
         setUserInfo(userRes.response);
 
@@ -145,107 +173,191 @@ const MePage = ({ handleLogout }) => {
   }, [activeSelection]);
 
   return (
-    <ScrollView contentContainerStyle={[styles.container, styles.contentContainer]}>
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" />
-          <Text>Loading profile...</Text>
-        </View>
-      ) : !profileInfo ? (
-        <Text style={styles.value}>No profile created for this match type yet.</Text>
-      ) : (
-        <>
-          <View style={styles.header}>
-            {photos.length > 0 && (
-              <Image
-                source={{ uri: photos[0].url }}
-                style={styles.profileImage}
-              />
-            )}
-            <View style={styles.headerContent}>
-              <Text style={styles.userName}>
-                {userInfo?.firstName} {userInfo?.lastName}
-              </Text>
-
-              {userInfo?.dob && (
-              <Text style={styles.ageText}>
-                {Math.floor((new Date() - new Date(userInfo.dob)) / (1000 * 60 * 60 * 24 * 365.25))} years old
-              </Text>
-            )}
-
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => navigation.navigate('EditProfilePage')}
-              >
-                <Text style={styles.editButtonText}>Edit Profile</Text>
-              </TouchableOpacity>
-            </View>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFEF8' }}>
+      <ScrollView contentContainerStyle={[styles.container, styles.contentContainer, { backgroundColor: '#FFFEF8', flexGrow: 1 }]}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" />
+            <Text>Loading profile...</Text>
           </View>
+        ) : !profileInfo ? (
+          <View style={styles.centered}>
+            <View style={{ position: 'absolute', top: 0, right: 0, zIndex: 10 }}>
+              <TouchableOpacity onPress={() => setMenuVisible(!menuVisible)} style={{ paddingHorizontal: 5, margin: 8 }}>
+                <Text style={{ fontSize: 24 }}>⋮</Text>
+              </TouchableOpacity>
+              {menuVisible && (
+                <View style={{
+                  position: 'absolute',
+                  top: 30,
+                  right: 0,
+                  backgroundColor: '#fff',
+                  padding: 10,
+                  borderRadius: 6,
+                  elevation: 5,
+                  shadowColor: '#000',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.2,
+                  shadowRadius: 4,
+                }}>
+                  <TouchableOpacity onPress={handleLogout}>
+                    <Text style={{ color: '#000', fontWeight: '500', width: 60, textAlign: 'center' }}>Logout</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+            <Text style={styles.infoText}>You don’t have a {activeSelection.toLowerCase()} profile yet.</Text>
+            <TouchableOpacity
+              style={styles.createProfileButton}
+              onPress={() => navigation.navigate('InAppCreateProfile', { matchType: activeSelection })}
+            >
+              <Text style={styles.createProfileButtonText}>Create {activeSelection} Profile</Text>
+            </TouchableOpacity>
+            <Text style={[styles.infoText, { marginTop: 10 }]}>or try a different mode!</Text>
+          </View>
+        ) : (
+          <>
+            <View style={styles.header}>
+              {photos.length > 0 && (
+                <Image
+                  source={{ uri: photos[0].url }}
+                  style={styles.profileImage}
+                />
+              )}
+              <View style={styles.headerContent}>
+                <Text style={styles.userName}>
+                  {userInfo?.firstName} {userInfo?.lastName}
+                  {userInfo?.dob ? `, ${Math.floor((new Date() - new Date(userInfo.dob)) / (1000 * 60 * 60 * 24 * 365.25))}` : ''}
+                </Text>
+                <TouchableOpacity
+                  style={[styles.editButton, { alignSelf: 'flex-start', marginTop: 4 }]}
+                  onPress={() => navigation.navigate('EditProfilePage')}
+                >
+                  <Text style={styles.editButtonText}>Edit Profile</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={() => setMenuVisible(!menuVisible)} style={{ position: 'absolute', right: 0, top: 0 }}>
+                  <Text style={{ fontSize: 24, paddingHorizontal: 5 }}>⋮</Text>
+                </TouchableOpacity>
+                {menuVisible && (
+                  <View style={{
+                    position: 'absolute',
+                    top: 35,
+                    right: 0,
+                    backgroundColor: '#fff',
+                    padding: 10,
+                    borderRadius: 6,
+                    elevation: 5,
+                    shadowColor: '#000',
+                    shadowOffset: { width: 0, height: 2 },
+                    shadowOpacity: 0.2,
+                    shadowRadius: 4,
+                    zIndex: 10,
+                  }}>
+                    <TouchableOpacity onPress={handleLogout}>
+                      <Text style={{ color: '#000', fontWeight: '500', width: 60, textAlign: 'center' }}>Logout</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.personalInfoSection}>
+            <Text style={styles.sectionTitle}>Personal Info</Text>
+            <Text style={styles.infoText}>Gender: {resolvedData.gender}</Text>
+            <Text style={styles.infoText}>Pronoun: {resolvedData.pronoun}</Text>
+            <Text style={styles.infoText}>Match With: {resolvedData.matchGender.join(', ')}</Text>
+            {activeSelection === 'Date' && (
+              <Text style={styles.infoText}>
+                Sexual Orientation: {resolvedData.orientation.join(', ')}
+              </Text>
+            )}
+          </View>
+
+            <View style={styles.bioSection}>
+              <Text style={styles.sectionTitle}>Bio</Text>
+              <Text style={styles.infoText}>{profileInfo.bio || 'No bio available.'}</Text>
+            </View>
+
+            <View style={styles.interestsSection}>
+              <Text style={styles.sectionTitle}>Interests</Text>
+              <View style={styles.interestsContainer}>
+                {resolvedData.tags.length > 0 ? (
+                  resolvedData.tags.map((tag, index) => (
+                    <View key={index} style={styles.interestBadge}>
+                      <Text style={styles.interestText}>{tag}</Text>
+                    </View>
+                  ))
+                ) : (
+                  <Text style={styles.infoText}>No interests added.</Text>
+                )}
+              </View>
+            </View>
+
+            <View style={styles.interestsSection}>
+              <Text style={styles.sectionTitle}>Photos</Text>
+              <View style={styles.photoContainer}>
+                {photos.length > 0 ? (
+                  photos.map((photo, index) => (
+                    <Image
+                      key={index}
+                      source={{ uri: photo.url }}
+                      style={styles.photoThumbnail}
+                    />
+                  ))
+                ) : (
+                  <Text style={styles.infoText}>No profile photos found.</Text>
+                )}
+              </View>
+            </View>
+          </>
+        )}
 
           
-
-
-          <View style={styles.personalInfoSection}>
-          <Text style={styles.sectionTitle}>Personal Info</Text>
-          <Text style={styles.infoText}>Gender: {resolvedData.gender}</Text>
-          <Text style={styles.infoText}>Pronoun: {resolvedData.pronoun}</Text>
-          <Text style={styles.infoText}>Match With: {resolvedData.matchGender.join(', ')}</Text>
-          {activeSelection === 'Date' && (
-            <Text style={styles.infoText}>
-              Sexual Orientation: {resolvedData.orientation.join(', ')}
-            </Text>
-          )}
-        </View>
-
-          <View style={styles.bioSection}>
-            <Text style={styles.sectionTitle}>Bio</Text>
-            <Text style={styles.infoText}>{profileInfo.bio || 'No bio available.'}</Text>
-          </View>
-
-          <View style={styles.interestsSection}>
-            <Text style={styles.sectionTitle}>Interests</Text>
-            <View style={styles.interestsContainer}>
-              {resolvedData.tags.length > 0 ? (
-                resolvedData.tags.map((tag, index) => (
-                  <View key={index} style={styles.interestBadge}>
-                    <Text style={styles.interestText}>{tag}</Text>
-                  </View>
-                ))
-              ) : (
-                <Text style={styles.infoText}>No interests added.</Text>
-              )}
-            </View>
-          </View>
-
-          <View style={styles.interestsSection}>
-            <Text style={styles.sectionTitle}>Photos</Text>
-            <View style={styles.photoContainer}>
-              {photos.length > 0 ? (
-                photos.map((photo, index) => (
-                  <Image
-                    key={index}
-                    source={{ uri: photo.url }}
-                    style={styles.photoThumbnail}
-                  />
-                ))
-              ) : (
-                <Text style={styles.infoText}>No profile photos found.</Text>
-              )}
-            </View>
-          </View>
-        </>
-      )}
-
-        <View style={styles.bioSection}>
-          <Text style={styles.sectionTitle}>Location</Text>
-          <Text style={styles.infoText}>{location}</Text>
-        </View>
-        
-      <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-        <Text style={styles.logoutButtonText}>Logout</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </ScrollView>
+    </SafeAreaView>
   );
 };
 
 export default MePage;
+
+
+// Add new styles for centered, createProfileButton, createProfileButtonText
+import { StyleSheet } from 'react-native';
+styles.centered = {
+  flex: 1,
+  justifyContent: 'center',
+  alignItems: 'center',
+  padding: 20,
+};
+styles.createProfileButton = {
+  marginTop: 20,
+  paddingVertical: 12,
+  paddingHorizontal: 20,
+  backgroundColor: '#DAE8A1',
+  borderRadius: 10,
+};
+styles.createProfileButtonText = {
+  color: '#000',
+  fontWeight: '600',
+  fontSize: 16,
+};
+styles.userAge = {
+  fontSize: 18,
+  color: '#555',
+  marginTop: 0,
+  fontWeight: 'bold',
+};
+styles.logoutButton = {
+  marginTop: 20,
+  marginBottom: 30,
+  paddingVertical: 14,
+  paddingHorizontal: 30,
+  backgroundColor: '#61C554',
+  borderRadius: 10,
+  alignItems: 'center',
+};
+styles.logoutButtonText = {
+  color: '#fff',
+  fontSize: 16,
+  fontWeight: '600',
+};
