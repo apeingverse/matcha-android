@@ -100,7 +100,9 @@ const InAppCreateProfile = ({ route, navigation }) => {
         Business: 4,
         Study: 5,
       };
-      const profileTypeId = profileTypeIdMap[selectedUploadProfileType];
+      // 🟡 Add debug log for selectedUploadProfileType
+      console.log('🟡 selectedUploadProfileType:', selectedUploadProfileType);
+      const profileTypeId = profileTypeIdMap[selectedUploadProfileType.trim()];
       if (!profileTypeId) {
         Alert.alert('Error', 'Invalid profile type for upload.');
         return;
@@ -214,9 +216,20 @@ const InAppCreateProfile = ({ route, navigation }) => {
   useEffect(() => {
     loadInitialData();
   }, []);
-  useEffect(() => {
-    setSelectedUploadProfileType(matchType);
-  }, [matchType]);
+useEffect(() => {
+  if (matchType) {
+    const formatted = matchType.trim();
+    const map = {
+      Date: 'Dating',
+      Casual: 'Casual',
+      Sports: 'Sports',
+      Business: 'Business',
+      Study: 'Study',
+      Dating: 'Dating',
+    };
+    setSelectedUploadProfileType(map[formatted] || '');
+  }
+}, [matchType]);
   
   
   useEffect(() => {
@@ -266,9 +279,15 @@ const handleNext = async () => {
       }
     }
 
+    if (step === 3) {
+      if (!form.bio || form.bio.trim().length === 0) {
+        return Alert.alert('Please enter something in your bio.');
+      }
+    }
+
     if (step === 4) {
-      if (form.interestTags.length < 3 || form.interestTags.length > 8) {
-        return Alert.alert('Select between 3 and 8 interest tags.');
+      if (form.interestTags.length < 3 || form.interestTags.length > 20) {
+        return Alert.alert('Select between 3 and 20 interest tags.');
       }
 
       try {
@@ -293,8 +312,12 @@ const handleNext = async () => {
   
   const handleSubmitProfile = async () => {
     const selectedModeName = matchModes.find((m) => m.id === selectedModes[0])?.name;
+    // Guard: ensure selectedModeName exists and is valid
+    if (!selectedModeName || !matchModeConfig[selectedModeName]) {
+      throw new Error('Invalid or missing profile type selection.');
+    }
     const config = matchModeConfig[selectedModeName];
-  
+
     const payload = {
       bio: form.bio,
       pronounId: form.pronounId,
@@ -306,7 +329,7 @@ const handleNext = async () => {
     if (config?.requiresOrientation) {
       payload.sexualOrientation = form.sexualOrientation;
     }
-  
+
     try {
       const res = await fetch(`https://api.matchaapp.net${config.postApi}`, {
         method: 'POST',
@@ -316,12 +339,12 @@ const handleNext = async () => {
         },
         body: JSON.stringify(payload),
       });
-  
+
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.errorMessages?.[0] || 'Unknown error');
       }
-  
+
       // We don't need to set state here, just return success
       return true;
     } catch (err) {
@@ -347,17 +370,24 @@ const handleNext = async () => {
 
     switch (step) {
       case 0:
+        // Exclude already created profiles by filtering matchModes
+        // Find out which profiles already exist
+        // For this patch, assume `existingProfileTypes` is available in scope (if not, must be added)
+        // For now, check if it exists, otherwise default to empty array
+        const existingProfileTypes = typeof existingProfileTypes !== "undefined" ? existingProfileTypes : [];
         return (
           <View>
             <Text style={styles.stepTitle}>What are you looking for?</Text>
-            {matchModes.map((mode) => (
-              <TouchableOpacity
-                key={mode.id}
-                onPress={() => toggleSelect(mode.id, selectedModes, setSelectedModes)}
-                style={[styles.optionButton, selectedModes.includes(mode.id) && styles.selectedOption]}
-              >
-                <Text style={selectedModes.includes(mode.id) ? styles.selectedText : styles.unselectedText}>{mode.name}</Text>
-              </TouchableOpacity>
+            {matchModes
+              .filter((mode) => !existingProfileTypes.includes(mode.name))
+              .map((mode) => (
+                <TouchableOpacity
+                  key={mode.id}
+                  onPress={() => setSelectedModes([mode.id])}
+                  style={[styles.optionButton, selectedModes.includes(mode.id) && styles.selectedOption]}
+                >
+                  <Text style={selectedModes.includes(mode.id) ? styles.selectedText : styles.unselectedText}>{mode.name}</Text>
+                </TouchableOpacity>
             ))}
           </View>
         );
@@ -434,7 +464,6 @@ const handleNext = async () => {
               value={form.bio}
               onChangeText={(text) => setForm({ ...form, bio: text })}
             />
-            <Button title="Skip" onPress={() => setForm({ ...form, bio: '' })} />
           </View>
         );
       case 4:
@@ -451,7 +480,13 @@ const handleNext = async () => {
                     {tags.map((tag) => (
                       <TouchableOpacity
                         key={tag.id}
-                        onPress={() => toggleSelect(tag.id, form.interestTags, (val) => setForm({ ...form, interestTags: val }))}
+                        onPress={() => {
+                          if (!form.interestTags.includes(tag.id) && form.interestTags.length >= 20) {
+                            Alert.alert('Maximum limit', 'You can select up to 20 interest tags.');
+                            return;
+                          }
+                          toggleSelect(tag.id, form.interestTags, (val) => setForm({ ...form, interestTags: val }));
+                        }}
                         style={[styles.pill, form.interestTags.includes(tag.id) && styles.selectedOption]}
                       >
                         <Text style={form.interestTags.includes(tag.id) ? styles.selectedText : styles.unselectedText}>{tag.name}</Text>
@@ -464,23 +499,71 @@ const handleNext = async () => {
           </ScrollView>
         );
         
-        case 6:
-  return (
-    <ScrollView>
-      <Text style={styles.stepTitle}>Add Your Photos</Text>
-      <Text style={styles.subtitle}>Add at least 1 photo to complete your profile.</Text>
+      case 6:
+        // Profile type selector should show the selected value from step 0, non-editable
+        return (
+          <ScrollView>
+            {/* Profile Type Display (non-editable) */}
+            <Text style={styles.stepTitle}>Profile Type</Text>
+            <View style={[styles.optionButton, { backgroundColor: '#f0f0f0' }]}>
+              <Text style={styles.selectedText}>{selectedUploadProfileType || 'Not selected'}</Text>
+            </View>
 
-      <View style={{ marginBottom: 10 }}>
-        <Button title="Pick Photos" onPress={handleSelectImage} />
-      </View>
-
-      <View style={styles.photoPreviewContainer}>
-        {selectedImages.map((img, idx) => (
-          <Image key={idx} source={{ uri: img.uri }} style={styles.photoPreview} />
-        ))}
-      </View>
-    </ScrollView>
-  );
+            {/* Image selection UI */}
+            <Text style={styles.stepTitle}>Add Your Photos</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 20 }}>
+              {Array.from({ length: 5 }).map((_, index) => (
+                <TouchableOpacity
+                  key={index}
+                  onPress={() => {
+                    launchImageLibrary(
+                      {
+                        mediaType: 'photo',
+                        quality: 0.7,
+                        maxWidth: 800,
+                        maxHeight: 800,
+                      },
+                      (response) => {
+                        const asset = response.assets?.[0];
+                        if (!asset) return;
+                        const updated = [...selectedImages];
+                        updated[index] = {
+                          uri: asset.uri,
+                          type: asset.type || 'image/jpeg',
+                          name: asset.fileName || `photo-${index + 1}.jpg`,
+                        };
+                        setSelectedImages(updated);
+                      }
+                    );
+                  }}
+                  style={{
+                    margin: 8,
+                    width: 100,
+                    height: 100,
+                    borderRadius: 10,
+                    backgroundColor: '#EEE',
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  }}
+                >
+                  {selectedImages[index]?.uri ? (
+                    <Image
+                      source={{ uri: selectedImages[index].uri }}
+                      style={{
+                        width: 100,
+                        height: 100,
+                        borderRadius: 10,
+                        backgroundColor: '#CCC',
+                      }}
+                    />
+                  ) : (
+                    <Text style={{ fontSize: 28, color: '#AAA' }}>+</Text>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          </ScrollView>
+        );
 
 
       default:

@@ -309,6 +309,11 @@ const MePage = ({ handleLogout }) => {
                 )}
               </View>
             </View>
+
+            <View style={styles.interestsSection}>
+              <Text style={styles.sectionTitle}>Location</Text>
+              <Text style={styles.infoText}>{location || 'Not set'}</Text>
+            </View>
           </>
         )}
 

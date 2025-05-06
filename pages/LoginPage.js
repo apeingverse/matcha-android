@@ -161,7 +161,7 @@ return () => {
         <TouchableOpacity style={styles.loginButton} onPress={handleLogin} disabled={loading}>
           <Text style={styles.loginButtonText}>{loading ? 'Logging in...' : 'Log In'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity>
+        <TouchableOpacity onPress={() => navigation.navigate('ForgotPasswordPage')}>
           <Text style={styles.forgotPassword}>Forgot Password?</Text>
         </TouchableOpacity>
       </View>

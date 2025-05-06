@@ -4,7 +4,9 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createStackNavigator, CardStyleInterpolators } from '@react-navigation/stack';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import 'react-native-url-polyfill/auto';
-
+//import { getFcmToken } from './utils/fcmHelper/index';
+//import { registerListenerWithFCM } from './utils/fcmHelper/index';
+import { LogBox } from 'react-native';
 // Contexts
 import { MatchTypeProvider, useMatchType } from './contexts/MatchTypeContext';
 
@@ -14,6 +16,7 @@ import { refreshTokenIfNeeded } from './utils/refreshTokenIfNeeded';
 // Pages
 import LoginPage from './pages/LoginPage';
 import SignUpPage from './pages/SignUpPage';
+import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import MatchaPage from './pages/MatchaPage';
 import LikesPage from './pages/LikesPage';
 import ChatPage from './pages/ChatPage';
@@ -33,7 +36,7 @@ import PronounSelectorModal from './pages/modals/PronounSelectorModel';
 
 // Components
 import NavigationBar from './components/NavigationBar';
-
+LogBox.ignoreAllLogs(); // ❗ Hides ALL warning messages
 const Stack = createStackNavigator();
 
 const App = () => {
@@ -45,6 +48,15 @@ const App = () => {
     bio: "I’m from 'Location' and Age years old, my height is xx cm.",
     interests: ['Tennis 🎾', 'Coffee ☕', 'Study 📚'],
   });
+ 
+  // useEffect(() => {
+  //   getFcmToken();
+  // }, []);
+  
+  // useEffect(() => {
+  //   const unsubscribe = registerListenerWithFCM();
+  //   return unsubscribe;
+  // }, []);
 
   useEffect(() => {
     const checkLoginStatus = async () => {
@@ -91,6 +103,7 @@ const App = () => {
               <Stack.Screen name="LoginPage">
                 {(props) => <LoginPage {...props} setIsLoggedIn={setIsLoggedIn} />}
               </Stack.Screen>
+              <Stack.Screen name="ForgotPasswordPage" component={ForgotPasswordPage} />
               <Stack.Screen name="SignUpPage" component={SignUpPage} />
             </>
           ) : (

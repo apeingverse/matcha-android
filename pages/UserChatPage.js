@@ -33,6 +33,40 @@ const UserChatPage = () => {
   const [aiUsed, setAiUsed] = useState(false);
   const [showUserCard, setShowUserCard] = useState(false);
   const [matchModeEnum, setMatchModeEnum] = useState(null);
+  const [showReportPopup, setShowReportPopup] = useState(false);
+  const [reportReason, setReportReason] = useState('');
+  const [isReporting, setIsReporting] = useState(false);
+  const handleReportUser = async () => {
+    if (!reportReason.trim()) {
+      Alert.alert("Please enter a reason.");
+      return;
+    }
+
+    try {
+      setIsReporting(true);
+      const token = await AsyncStorage.getItem('accessToken');
+      const response = await fetch(`https://api.matchaapp.net/api/Safety/ReportProfile?reportedProfileId=${receiverProfileId}&Reason=${encodeURIComponent(reportReason)}`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          Accept: 'text/plain',
+        },
+      });
+
+      if (response.ok) {
+        Alert.alert("✅ Report sent", "Thank you for your feedback.");
+        setShowReportPopup(false);
+        setReportReason('');
+      } else {
+        Alert.alert("❌ Error", "Could not send the report.");
+      }
+    } catch (error) {
+      console.error("Error reporting user:", error);
+      Alert.alert("❌ Error", "Something went wrong.");
+    } finally {
+      setIsReporting(false);
+    }
+  };
   useEffect(() => {
     const fetchMatchMode = async () => {
       const activeMatchType = (await AsyncStorage.getItem('activeMatchType'))?.toLowerCase();
@@ -80,8 +114,7 @@ const UserChatPage = () => {
       'Choose the type of attachment',
       [
         { text: 'Photo', onPress: () => pickMedia('photo') },
-        { text: 'Audio', onPress: () => pickDocument('audio') },
-        { text: 'File', onPress: () => pickDocument('file') },
+
         { text: 'Cancel', style: 'cancel' },
       ]
     );
@@ -125,7 +158,21 @@ const UserChatPage = () => {
         type: 'image/jpeg',
       });
 
-      const endpoint = 'SendPhotoAttachment';
+      let endpoint;
+      switch (type) {
+        case MessageTypes.IMAGE:
+          endpoint = 'SendPhotoAttachment';
+          break;
+        case MessageTypes.AUDIO:
+          endpoint = 'SendAudioAttachment';
+          break;
+        case MessageTypes.FILE:
+          endpoint = 'SendFileAttachment';
+          break;
+        default:
+          console.warn("Unsupported message type:", type);
+          return;
+      }
 
       const res = await fetch(
         `https://api.matchaapp.net/api/Chat/${endpoint}?senderProfileId=${currentUserId}&receiverProfileId=${receiverProfileId}`,
@@ -414,7 +461,7 @@ const UserChatPage = () => {
             </TouchableOpacity>
             {isUserOnline && <Text style={styles.onlineStatus}>Online</Text>}
           </View>
-          <TouchableOpacity style={styles.dots}>
+          <TouchableOpacity style={styles.dots} onPress={() => setShowReportPopup(true)}>
             <Text style={{ fontSize: 20 }}>⋮</Text>
           </TouchableOpacity>
         </View>
@@ -557,6 +604,54 @@ const UserChatPage = () => {
                   setShowUserCard(false);
                 }}
               />
+            </View>
+          </View>
+        )}
+        {showReportPopup && (
+          <View style={{
+            ...StyleSheet.absoluteFillObject,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: 10000,
+          }}>
+            <View style={{
+              backgroundColor: '#FFF',
+              width: '85%',
+              padding: 20,
+              borderRadius: 12,
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 4,
+              elevation: 5,
+            }}>
+              <Text style={{ fontSize: 18, fontWeight: '600', marginBottom: 12 }}>Report User</Text>
+              <TextInput
+                placeholder="Enter your reason here..."
+                style={{
+                  borderWidth: 1,
+                  borderColor: '#CCC',
+                  borderRadius: 8,
+                  padding: 10,
+                  minHeight: 60,
+                  textAlignVertical: 'top',
+                  marginBottom: 10,
+                }}
+                multiline
+                value={reportReason}
+                onChangeText={setReportReason}
+              />
+              <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                <TouchableOpacity onPress={() => setShowReportPopup(false)} style={{ marginRight: 10 }}>
+                  <Text style={{ fontSize: 16, color: '#888' }}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity onPress={handleReportUser}>
+                  <Text style={{ fontSize: 16, color: isReporting ? '#999' : '#E53935' }}>
+                    {isReporting ? 'Sending...' : 'Send'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           </View>
         )}

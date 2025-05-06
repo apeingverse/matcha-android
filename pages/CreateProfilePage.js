@@ -59,7 +59,7 @@ const CreateProfilePage = ({ navigation }) => {
   const [interestTags, setInterestTags] = useState([]);
   const [selectedUploadProfileType, setSelectedUploadProfileType] = useState('');
   const [createdProfileTypes, setCreatedProfileTypes] = useState([]);
-  const [matchRange, setMatchRange] = useState(50); // default to 100 km
+  const [matchRange, setMatchRange] = useState(50); // default to 100 km  
 
   const uploadImages = async () => {
     console.log('🟢 uploadImages called');
@@ -208,40 +208,55 @@ const CreateProfilePage = ({ navigation }) => {
   };
 
   const toggleSelect = (id, array, setArray) => {
-    if (array.includes(id)) setArray(array.filter((i) => i !== id));
-    else setArray([...array, id]);
+    if (step === 0) {
+      setArray([id]); // only one mode allowed at step 0
+    } else {
+      if (array.includes(id)) {
+        setArray(array.filter((i) => i !== id));
+      } else {
+        if (step === 4 && array.length >= 20) {
+          Alert.alert('You can select a maximum of 20 interest tags.');
+          return;
+        }
+        setArray([...array, id]);
+      }
+    }
   };
 
   const handleNext = async () => {
     if (step === 0 && selectedModes.length === 0) {
       return Alert.alert('Select at least one match mode.');
     }
-  
+
     if (step === 1 && (!form.genderId || !form.pronounId)) {
       return Alert.alert('Select one gender and one pronoun.');
     }
-  
+
     const isDating = matchModes.find((m) => m.id === selectedModes[currentModeIndex])?.name === 'Dating';
     if (step === 2 && isDating) {
       if (form.sexualOrientation.length === 0 || form.matchGender.length === 0) {
         return Alert.alert('Select at least one sexual orientation and match gender.');
       }
     }
-  
+
+    if (step === 3 && (!form.bio || form.bio.trim().length === 0)) {
+      return Alert.alert('Please enter a short bio before continuing.');
+    }
+
     if (step === 4) {
-      if (form.interestTags.length < 3 || form.interestTags.length > 8) {
-        return Alert.alert('Select between 3 and 8 interest tags.');
+      if (form.interestTags.length < 3 || form.interestTags.length > 20) {
+        return Alert.alert('Select between 3 and 20 interest tags.');
       }
       await handleSubmitCurrentMode();
       return setStep(5); // go to Location step
     }
-  
+
     if (step === 5) {
       // Location share logic happens here, don't skip it
       handleShareLocation();
       return;
     }
-  
+
     if (step === 6) {
       if (selectedImages.length === 0) {
         return Alert.alert('Upload at least one profile photo.');
@@ -249,7 +264,7 @@ const CreateProfilePage = ({ navigation }) => {
       console.log('🟢 Proceeding to upload images...');
       return uploadImages(); // send photos
     }
-  
+
     setStep((s) => s + 1);
   };
   const handleShareLocation = () => {
@@ -468,7 +483,6 @@ const CreateProfilePage = ({ navigation }) => {
               value={form.bio}
               onChangeText={(text) => setForm({ ...form, bio: text })}
             />
-            <Button title="Skip" onPress={() => setForm({ ...form, bio: '' })} />
           </View>
         );
       case 4:
@@ -533,9 +547,7 @@ const CreateProfilePage = ({ navigation }) => {
           return (
             <ScrollView>
               <Text style={styles.stepTitle}>Add Your Photos</Text>
-              <Text style={styles.subtitle}>Add at least 1 photo to complete your profile.</Text>
-        
-              <Text style={styles.label}>Select Profile Type to Upload Photos:</Text>
+
               <View style={styles.dropdownWrapper}>
                 {createdProfileTypes.map((type) => (
                   <TouchableOpacity
@@ -552,15 +564,58 @@ const CreateProfilePage = ({ navigation }) => {
                   </TouchableOpacity>
                 ))}
               </View>
-        
-              <Button title="Pick Photos" onPress={handleSelectImage} />
-              <View style={styles.photoPreviewContainer}>
-                {selectedImages.map((img, idx) => (
-                  <Image key={idx} source={{ uri: img.uri }} style={styles.photoPreview} />
+
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', marginVertical: 20 }}>
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <TouchableOpacity
+                    key={index}
+                    onPress={() => {
+                      launchImageLibrary(
+                        {
+                          mediaType: 'photo',
+                          quality: 0.7,
+                          maxWidth: 800,
+                          maxHeight: 800,
+                        },
+                        (response) => {
+                          const asset = response.assets?.[0];
+                          if (!asset) return;
+                          const updated = [...selectedImages];
+                          updated[index] = {
+                            uri: asset.uri,
+                            type: asset.type || 'image/jpeg',
+                            name: asset.fileName || `photo-${index + 1}.jpg`,
+                          };
+                          setSelectedImages(updated);
+                        }
+                      );
+                    }}
+                    style={{
+                      margin: 8,
+                      width: 100,
+                      height: 100,
+                      borderRadius: 10,
+                      backgroundColor: '#EEE',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    {selectedImages[index]?.uri ? (
+                      <Image
+                        source={{ uri: selectedImages[index].uri }}
+                        style={{
+                          width: 100,
+                          height: 100,
+                          borderRadius: 10,
+                          backgroundColor: '#CCC',
+                        }}
+                      />
+                    ) : (
+                      <Text style={{ fontSize: 28, color: '#AAA' }}>+</Text>
+                    )}
+                  </TouchableOpacity>
                 ))}
               </View>
-        
-              <Button title="Finish & Upload" onPress={uploadImages} />
             </ScrollView>
           );
         

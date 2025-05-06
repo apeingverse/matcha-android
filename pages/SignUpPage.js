@@ -11,7 +11,7 @@ import {
 import CheckBox from '@react-native-community/checkbox';
 import DateTimePicker from '@react-native-community/datetimepicker';
 // import Icon from 'react-native-vector-icons/FontAwesome'; // Import Eye Icon
-import Icon from 'react-native-vector-icons/FontAwesome';
+import { Text as Icon } from 'react-native'; 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 
@@ -22,7 +22,6 @@ const SignUpPage = ({ navigation }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [dob, setDob] = useState(new Date()); // Default to today
-  const [isChecked, setIsChecked] = useState(false);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [emailError, setEmailError] = useState(''); // ✅ State for email error
   const [passwordError, setPasswordError] = useState('');
@@ -70,6 +69,7 @@ const validatePassword = (password) => {
       setEmailError('Invalid email format');
       hasError = true;
     }
+
   
     if (!validatePassword(password)) {
       setPasswordError('Must be 8+ characters, include uppercase, lowercase, number, and symbol.');
@@ -186,7 +186,9 @@ const validatePassword = (password) => {
           />
 
           <TouchableOpacity onPress={togglePasswordVisibility} style={styles.eyeButton}>
-            <Icon name={passwordVisible ? 'eye' : 'eye-slash'} size={20} color="#888" />
+            <Icon style={{ fontSize: 18, color: '#888' }}>
+              {passwordVisible ? '👁️' : '🙈'}
+            </Icon>
           </TouchableOpacity>
         </View>
         {passwordError ? <Text style={styles.errorText}>{passwordError}</Text> : null}
@@ -204,21 +206,18 @@ const validatePassword = (password) => {
       </TouchableOpacity>
 
       {showDatePicker && (
-  <View style={styles.pickerContainer}>
-    <DateTimePicker
-      value={tempDob}
-      mode="date"
-      display="spinner"
-      maximumDate={new Date()}
-      onChange={(event, selectedDate) => {
-        if (event.type === 'set' && selectedDate) {
-          setDob(selectedDate); // ✅ update dob immediately
-          setShowDatePicker(false); // ✅ close picker after OK
-        } else if (event.type === 'dismissed') {
-          setShowDatePicker(false); // just close if dismissed
-        }
-      }}
-    />
+        <View style={styles.pickerContainer}>
+          <DateTimePicker
+            value={tempDob} 
+            mode="date"
+            display="spinner"
+            maximumDate={new Date()} // Prevents selecting a future date
+            onChange={(event, selectedDate) => {
+              if (selectedDate) {
+                setTempDob(selectedDate); // Only update temporary state
+              }
+            }}
+          />
           {/* Confirm Button */}
           <TouchableOpacity 
             style={styles.confirmButton} 
@@ -237,7 +236,7 @@ const validatePassword = (password) => {
       )}
 
 
-        
+
 
         <TouchableOpacity style={styles.signupButton} onPress={handleSignUp}>
           <Text style={styles.signupButtonText}>Sign Up</Text>
@@ -377,21 +376,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
 
-  /* ✅ Checkbox & Terms */
-  checkboxContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  checkboxText: {
-    color: '#333',
-    fontSize: 14,
-  },
-  rulesText: {
-    color: '#4CAF50',
-    fontWeight: 'bold',
-    textDecorationLine: 'underline',
-  },
 
   /* ✅ Footer */
   footer: {

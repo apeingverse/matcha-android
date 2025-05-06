@@ -81,11 +81,33 @@ const MatchaPage = () => {
       console.log('🔎 findData:', JSON.stringify(findData, null, 2));
   
       if (findData.response !== true) {
-        console.log('⚠️ No profile created for this mode.');
-        setShowCreatePrompt(true);
-        setMatches([]);
+        // --- Begin new logic for distinguishing no profile vs no matches ---
+        const profileStateRes = await fetch(`https://api.matchaapp.net/api/Profile/GetLoggedInUserProfileState`, { headers });
+        const profileStateData = await profileStateRes.json();
+        const state = profileStateData.response || {};
+
+        const profileCreatedFields = {
+          Date: 'isDatingProfileCreated',
+          Casual: 'isCasualProfileCreated',
+          Sport: 'isSportsProfileCreated',
+          Business: 'isBusinessProfileCreated',
+          Study: 'isStudyProfileCreated',
+        };
+
+        const profileCreated = state[profileCreatedFields[activeSelection]];
+
+        if (!profileCreated) {
+          console.log(`⚠️ ${activeSelection} profile not created.`);
+          setShowCreatePrompt(true);
+        } else {
+          console.log(`ℹ️ ${activeSelection} profile exists but no matches found.`);
+          setShowCreatePrompt(false);
+          setMatches([]);
+        }
+
         setLoading(false);
         return;
+        // --- End new logic ---
       }
       setShowCreatePrompt(false); // ✅ important
 

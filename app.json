@@ -1,4 +1,7 @@
 {
-  "name": "MatchaDate",
-  "displayName": "MatchaDate"
+  "name": "MatchaDateLast2",
+  "displayName": "MatchaDateLast2",
+  "android": {
+    "package": "com.matchadatelast2"
+  }
 }
