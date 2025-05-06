@@ -1,4 +1,4 @@
-// CreateProfilePage.js
+// InAppCrearteProfile.js
 import React, { useState, useEffect } from 'react';
 import {
   View,
@@ -52,7 +52,7 @@ const InAppCreateProfile = ({ route, navigation }) => {
   const [step, setStep] = useState(0);
   const [token, setToken] = useState('');
   const [matchModes, setMatchModes] = useState([]);
-  const [selectedModes, setSelectedModes] = useState([matchModes.find((m) => m.name === matchType)?.id]);
+  const [selectedModes, setSelectedModes] = useState([]);
 
   const [currentModeIndex, setCurrentModeIndex] = useState(0);
   const [selectedImages, setSelectedImages] = useState([]);
@@ -101,22 +101,32 @@ const InAppCreateProfile = ({ route, navigation }) => {
         Study: 5,
       };
       const profileTypeId = profileTypeIdMap[selectedUploadProfileType];
+      if (!profileTypeId) {
+        Alert.alert('Error', 'Invalid profile type for upload.');
+        return;
+      }
+
+      console.log('Uploading with:', {
+        profileTypeId,
+        images: selectedImages.map((img) => img.uri),
+      });
 
       const response = await fetch(`https://api.matchaapp.net/api/Photo/UploadProfilePhotosForProfiles?profileType=${profileTypeId}`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data',
+          // Let fetch set Content-Type automatically
         },
         body: formData,
       });
 
       const text = await response.text();
+      console.log('Upload response status:', response.status);
       let data = {};
       try {
         data = JSON.parse(text);
       } catch (e) {
-        console.warn('⚠️ Response not JSON:', text);
+        console.warn('⚠️ Non-JSON response:', text);
       }
 
       if (!response.ok) {
@@ -185,17 +195,15 @@ const InAppCreateProfile = ({ route, navigation }) => {
 
     const matchModesData = (await matchRes.json()).response || [];
     setMatchModes(matchModesData); // ✅ set first
-    
-    const matchedMode = matchModesData.find((m) => m.name === matchType);
-    setSelectedModes(matchedMode ? [matchedMode.id] : []);
-    
+
+    setSelectedModes([]);
+    setCurrentModeIndex(0);
+
     setPronouns((await pronounRes.json()).response || []);
     setSexualOrientations((await orientationRes.json()).response || []);
 
     const tagData = await tagRes.json();
-
-  setInterestTags(tagData.response || []);
-
+    setInterestTags(tagData.response || []);
   };
   useEffect(() => {
     if (step === 1 && selectedModes.length > 0) {
@@ -218,14 +226,15 @@ const InAppCreateProfile = ({ route, navigation }) => {
   }, [step, currentModeIndex]);
 
   const loadGendersForCurrentMode = async () => {
-    const config = matchModeConfig[matchType];
+    const selectedModeObj = matchModes.find((m) => m.id === selectedModes[0]);
+    const config = matchModeConfig[selectedModeObj?.name];
     if (!config || !config.genderApi) return;
-  
+
     try {
       const res = await fetch(`https://api.matchaapp.net${config.genderApi}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-  
+
       const data = await res.json();
       setGenders(data.response || []);
     } catch (err) {
@@ -244,23 +253,24 @@ const handleNext = async () => {
     if (step === 0 && selectedModes.length === 0) {
       return Alert.alert('Select at least one match mode.');
     }
-  
+
     if (step === 1 && (!form.genderId || !form.pronounId)) {
       return Alert.alert('Select one gender and one pronoun.');
     }
-  
-    const isDating = matchModes.find((m) => m.id === selectedModes[currentModeIndex])?.name === 'Dating';
+
+    const selectedModeName = matchModes.find((m) => m.id === selectedModes[0])?.name;
+    const isDating = selectedModeName === 'Dating';
     if (step === 2 && isDating) {
       if (form.sexualOrientation.length === 0 || form.matchGender.length === 0) {
         return Alert.alert('Select at least one sexual orientation and match gender.');
       }
     }
-  
+
     if (step === 4) {
       if (form.interestTags.length < 3 || form.interestTags.length > 8) {
         return Alert.alert('Select between 3 and 8 interest tags.');
       }
-      
+
       try {
         await handleSubmitProfile();  // First submit the profile
         setStep(6);  // Then skip to step 6
@@ -269,7 +279,7 @@ const handleNext = async () => {
       }
       return; // Important to return here to prevent the default step increment
     }
-    
+
     if (step === 6) {
       if (selectedImages.length === 0) {
         return Alert.alert('Upload at least one profile photo.');
@@ -277,16 +287,13 @@ const handleNext = async () => {
       console.log('🟢 Proceeding to upload images...');
       return uploadImages(); // send photos
     }
-  
+
     setStep((s) => s + 1);
   };
   
   const handleSubmitProfile = async () => {
-    const currentMatchMode = matchModes.find((m) => m.name === matchType);
-    const config = matchModeConfig[matchType];
-    
-    // Remove this line, it's creating a new state inside the function which is incorrect
-    // const [createdProfileTypes, setCreatedProfileTypes] = useState([matchType]);
+    const selectedModeName = matchModes.find((m) => m.id === selectedModes[0])?.name;
+    const config = matchModeConfig[selectedModeName];
   
     const payload = {
       bio: form.bio,
@@ -296,7 +303,7 @@ const handleNext = async () => {
       matchGender: form.matchGender,
     };
     
-    if (config.requiresOrientation) {
+    if (config?.requiresOrientation) {
       payload.sexualOrientation = form.sexualOrientation;
     }
   
@@ -335,17 +342,25 @@ const handleNext = async () => {
 
 
   const renderStep = () => {
-    const currentMode = matchModes.find((m) => m.name === matchType);
-
-    const isDating = currentMode?.name === 'Dating';
+    const selectedModeName = matchModes.find((m) => m.id === selectedModes[0])?.name;
+    const isDating = selectedModeName === 'Dating';
 
     switch (step) {
-        case 0:
-  return (
-    <View>
-      <Text style={styles.stepTitle}>You're creating a {matchType} profile</Text>
-    </View>
-  );
+      case 0:
+        return (
+          <View>
+            <Text style={styles.stepTitle}>What are you looking for?</Text>
+            {matchModes.map((mode) => (
+              <TouchableOpacity
+                key={mode.id}
+                onPress={() => toggleSelect(mode.id, selectedModes, setSelectedModes)}
+                style={[styles.optionButton, selectedModes.includes(mode.id) && styles.selectedOption]}
+              >
+                <Text style={selectedModes.includes(mode.id) ? styles.selectedText : styles.unselectedText}>{mode.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        );
 
       case 1:
         return (
@@ -364,49 +379,49 @@ const handleNext = async () => {
             ))}
           </View>
         );
-        case 2:
-          return (
-            <View>
-              {isDating ? (
-                <>
-                  <Text style={styles.stepTitle}>What is your sexual orientation?</Text>
-                  {sexualOrientations.map((s) => (
-                    <TouchableOpacity
-                      key={s.id}
-                      onPress={() => toggleSelect(s.id, form.sexualOrientation, (val) => setForm({ ...form, sexualOrientation: val }))}
-                      style={[styles.optionButton, form.sexualOrientation.includes(s.id) && styles.selectedOption]}
-                    >
-                      <Text style={form.sexualOrientation.includes(s.id) ? styles.selectedText : styles.unselectedText}>{s.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-    
-                  <Text style={styles.stepTitle}>Who do you want to be matched with?</Text>
-                  {genders.map((g) => (
-                    <TouchableOpacity
-                      key={g.id}
-                      onPress={() => toggleSelect(g.id, form.matchGender, (val) => setForm({ ...form, matchGender: val }))}
-                      style={[styles.optionButton, form.matchGender.includes(g.id) && styles.selectedOption]}
-                    >
-                      <Text style={form.matchGender.includes(g.id) ? styles.selectedText : styles.unselectedText}>{g.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </>
-              ) : (
-                <>
-                  <Text style={styles.stepTitle}>Who do you want to be matched with?</Text>
-                  {genders.map((g) => (
-                    <TouchableOpacity
-                      key={g.id}
-                      onPress={() => toggleSelect(g.id, form.matchGender, (val) => setForm({ ...form, matchGender: val }))}
-                      style={[styles.optionButton, form.matchGender.includes(g.id) && styles.selectedOption]}
-                    >
-                      <Text style={form.matchGender.includes(g.id) ? styles.selectedText : styles.unselectedText}>{g.name}</Text>
-                    </TouchableOpacity>
-                  ))}
-                </>
-              )}
-            </View>
-          );
+      case 2:
+        return (
+          <View>
+            {isDating ? (
+              <>
+                <Text style={styles.stepTitle}>What is your sexual orientation?</Text>
+                {sexualOrientations.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    onPress={() => toggleSelect(s.id, form.sexualOrientation, (val) => setForm({ ...form, sexualOrientation: val }))}
+                    style={[styles.optionButton, form.sexualOrientation.includes(s.id) && styles.selectedOption]}
+                  >
+                    <Text style={form.sexualOrientation.includes(s.id) ? styles.selectedText : styles.unselectedText}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+
+                <Text style={styles.stepTitle}>Who do you want to be matched with?</Text>
+                {genders.map((g) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => toggleSelect(g.id, form.matchGender, (val) => setForm({ ...form, matchGender: val }))}
+                    style={[styles.optionButton, form.matchGender.includes(g.id) && styles.selectedOption]}
+                  >
+                    <Text style={form.matchGender.includes(g.id) ? styles.selectedText : styles.unselectedText}>{g.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            ) : (
+              <>
+                <Text style={styles.stepTitle}>Who do you want to be matched with?</Text>
+                {genders.map((g) => (
+                  <TouchableOpacity
+                    key={g.id}
+                    onPress={() => toggleSelect(g.id, form.matchGender, (val) => setForm({ ...form, matchGender: val }))}
+                    style={[styles.optionButton, form.matchGender.includes(g.id) && styles.selectedOption]}
+                  >
+                    <Text style={form.matchGender.includes(g.id) ? styles.selectedText : styles.unselectedText}>{g.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </>
+            )}
+          </View>
+        );
       case 3:
         return (
           <View>
