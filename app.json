@@ -1,6 +1,6 @@
 {
   "name": "MatchaDateLast2",
-  "displayName": "MatchaDateLast2",
+  "displayName": "MatchaDate",
   "android": {
     "package": "com.matchadatelast2"
   }
